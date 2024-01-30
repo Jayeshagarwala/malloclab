@@ -49,10 +49,105 @@
 
 #define ALIGNMENT 16
 
+#define PADDING_SIZE 8
+#define HEADER_SIZE 8
+#define FOOTER_SIZE 8
+#define PROLOGUE_SIZE 16
+#define EPILOGUE_SIZE 8
+
+void* prologue_ptr; 
+void* heap_list_ptr;
+
 // rounds up to the nearest multiple of ALIGNMENT
 static size_t align(size_t x)
 {
     return ALIGNMENT * ((x+ALIGNMENT-1)/ALIGNMENT);
+}
+
+/*
+ * pack: packs a size and allocated bit into a word
+ */
+
+static size_t pack(size_t size, bool is_allocated) {
+
+    return size | is_allocated;
+}
+
+/*
+ * get_block_size: reads the block size from header or footer
+ */
+static size_t get_block_size(void *ptr) {
+
+    return read_block(ptr) & ~0x7;
+
+}
+
+/*
+ * get_is_allocated: reads if the block is allocated or not from header or footer
+ */
+
+static bool get_is_allocated(void *ptr) {
+
+    return read_block(ptr) & 0x1;
+
+}
+
+/*
+ * read_block: reads a word at address ptr
+ */
+
+static size_t read_block(void *ptr) {
+
+    return *((size_t *)ptr);
+
+}
+
+/*
+ * write_block: writes a word at address ptr
+ */
+
+static void write_block(void *ptr, size_t val) {
+
+    *((size_t *)ptr) = val;
+
+}
+
+/*
+ * get_header: returns the header address of a block, given block pointer
+ */
+
+static void *get_header(void *ptr) {
+
+    return (void *)((size_t *)ptr - HEADER_SIZE);
+
+}
+
+/*
+ * get_footer: returns the footer address of a block, given block pointer
+ */
+
+static void *get_footer(void *ptr) {
+
+    return (void *)((size_t *)ptr + get_block_size(get_header(ptr)) - FOOTER_SIZE);
+
+}
+
+/*
+ * get_next_block: returns the next block address, given block pointer
+ */
+static void *get_next_block(void *ptr) {
+
+    return (void *)((size_t *)ptr + get_block_size(get_header(ptr)));
+
+}
+
+/*
+ * get_prev_block: returns the previous block address, given block pointer
+ */
+static void *get_prev_block(void *ptr) {
+
+    return (void *)((char *)ptr - get_block_size((void *)((char *)ptr - HEADER_SIZE - FOOTER_SIZE)));
+
 }
 
 /*
@@ -61,6 +156,22 @@ static size_t align(size_t x)
 bool mm_init(void)
 {
     // IMPLEMENT THIS
+
+    /* Create the initial empty heap */
+    heap_list_ptr = mem_sbrk(PADDING_SIZE + PROLOGUE_SIZE + EPILOGUE_SIZE);
+
+    if (heap_list_ptr == (void *)-1)
+        return false;
+
+    prologue_ptr = heap_list_ptr + PADDING_SIZE;
+
+    write_block(heap_list_ptr, 0); // Alignment padding
+    write_block(heap_list_ptr + PADDING_SIZE, pack(PROLOGUE_SIZE, true)); // Prologue header
+    write_block(heap_list_ptr + PADDING_SIZE + HEADER_SIZE, pack(PROLOGUE_SIZE, true)); // Prologue footer
+    write_block(heap_list_ptr + PADDING_SIZE + PROLOGUE_SIZE, pack(EPILOGUE_SIZE, true)); // Epilogue header
+
+    heap_list_ptr += PADDING_SIZE + EPILOGUE_SIZE;
+
     return true;
 }
 
