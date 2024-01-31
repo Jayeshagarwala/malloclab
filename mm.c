@@ -91,7 +91,7 @@ static void write_block(uint64_t *ptr, uint64_t val) {
 
 static uint64_t pack(uint64_t size, uint64_t is_allocated) {
 
-    return size | is_allocated;
+    return  (uint64_t)(size | is_allocated);
 }
 
 /*
@@ -117,7 +117,7 @@ static uint64_t get_is_allocated(uint64_t *ptr) {
  * get_header: returns the header address of a block, given block pointer
  */
 
-static uint64_t *get_header(uint64_t *ptr) {
+static uint64_t* get_header(uint64_t *ptr) {
 
     return (uint64_t *)((uint64_t *)ptr - (HEADER_SIZE/UINT64_T_SIZE));
 
@@ -127,27 +127,27 @@ static uint64_t *get_header(uint64_t *ptr) {
  * get_footer: returns the footer address of a block, given block pointer
  */
 
-static uint64_t *get_footer(uint64_t *ptr) {
+static uint64_t* get_footer(uint64_t *ptr) {
 
-    return (uint64_t *)((uint64_t *)ptr + get_block_size(ptr) - (FOOTER_SIZE/UINT64_T_SIZE));
+    return (uint64_t *)((uint64_t *)ptr + ((get_block_size(ptr) - FOOTER_SIZE)/UINT64_T_SIZE));
 
 }
 
 /*
  * get_next_block: returns the next block address, given block pointer
  */
-static uint64_t *get_next_block(uint64_t *ptr) {
+static uint64_t* get_next_block(uint64_t *ptr) {
 
-    return (uint64_t *)((uint64_t *)ptr + get_block_size(ptr));
+    return (uint64_t *)((uint64_t *)ptr + (get_block_size(ptr)/UINT64_T_SIZE));
 
 }
 
 /*
  * get_prev_block: returns the previous block address, given block pointer
  */
-static uint64_t *get_prev_block(uint64_t *ptr) {
+static uint64_t* get_prev_block(uint64_t *ptr) {
 
-    return (uint64_t *)((uint64_t *)ptr - get_block_size((uint64_t *)((uint64_t *)ptr - ((HEADER_SIZE + FOOTER_SIZE)/UINT64_T_SIZE))));
+    return ptr - (get_block_size(ptr - ((HEADER_SIZE + FOOTER_SIZE)/UINT64_T_SIZE))/UINT64_T_SIZE);
 
 }
 
@@ -155,7 +155,7 @@ static uint64_t *get_prev_block(uint64_t *ptr) {
  * get_block_payload: returns the payload address, given block pointer
  */
 
-static uint64_t *get_block_payload(uint64_t *ptr) {
+static uint64_t* get_block_payload(uint64_t *ptr) {
 
     return (uint64_t *)((uint64_t *)ptr + (HEADER_SIZE/UINT64_T_SIZE));
 
@@ -174,9 +174,11 @@ static uint64_t* expand_heap(uint64_t new_block_size)
     if (new_block_ptr == (void *)-1)
         return NULL;
     
-    write_block(get_header(new_block_ptr), pack(new_block_size, 0)); // New block header
+    new_block_ptr -= (HEADER_SIZE/UINT64_T_SIZE); // New block header
+
+    write_block(new_block_ptr, pack(new_block_size, 0)); // New block header
     write_block(get_footer(new_block_ptr), pack(new_block_size, 0)); // New block footer
-    write_block(get_header(get_next_block(new_block_ptr)), pack(0, 1)); // New epilogue header
+    write_block(get_next_block(new_block_ptr), pack(0, 1)); // New epilogue header
 
     return new_block_ptr;
 
@@ -215,7 +217,7 @@ bool mm_init(void)
 {
     // IMPLEMENT THIS
 
-    /* Create the initial empty heap */
+    //Create the initial empty heap
     prologue_ptr = (uint64_t *)mem_sbrk(PADDING_SIZE + PROLOGUE_SIZE + EPILOGUE_SIZE);
 
     if (prologue_ptr == (void *)-1)
@@ -243,16 +245,16 @@ void* malloc(size_t size)
 
     //search for a free block of sufficient size
     for (current_block_ptr = prologue_ptr; get_block_size(current_block_ptr) > 0; current_block_ptr = get_next_block(current_block_ptr)){
-        if(is_allocated(current_block_ptr) == 0 && get_block_size(current_block_ptr) >= current_block_size){
+        if(get_is_allocated(current_block_ptr) == 0 && get_block_size(current_block_ptr) >= current_block_size){
             allocate_block(current_block_ptr, current_block_size);
             return get_block_payload(current_block_ptr);
         }
     }
-    
+
     //if no free block of sufficient size is found, expand the heap
     uint64_t *new_block_ptr = expand_heap(current_block_size);
 
-    if (new_block_ptr == (void *)-1)
+    if (new_block_ptr == NULL)
         return NULL;
 
     allocate_block(new_block_ptr, current_block_size);
@@ -266,6 +268,7 @@ void* malloc(size_t size)
 void free(void* ptr)
 {
     // IMPLEMENT THIS
+
 
     return;
 }
