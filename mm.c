@@ -114,7 +114,7 @@ static uint64_t get_is_allocated(uint64_t *ptr) {
 }
 
 /*
- * get_header: returns the header address of a block, given block pointer
+ * get_header: returns the header address of a block, given block payload pointer
  */
 
 static uint64_t* get_header(uint64_t *ptr) {
@@ -124,7 +124,7 @@ static uint64_t* get_header(uint64_t *ptr) {
 }
 
 /*
- * get_footer: returns the footer address of a block, given block pointer
+ * get_footer: returns the footer address of a block, given block header pointer
  */
 
 static uint64_t* get_footer(uint64_t *ptr) {
@@ -147,7 +147,7 @@ static uint64_t* get_next_block(uint64_t *ptr) {
  */
 static uint64_t* get_prev_block(uint64_t *ptr) {
 
-    return ptr - (get_block_size(ptr - ((HEADER_SIZE + FOOTER_SIZE)/UINT64_T_SIZE))/UINT64_T_SIZE);
+    return ptr - (get_block_size(ptr - ((FOOTER_SIZE)/UINT64_T_SIZE))/UINT64_T_SIZE);
 
 }
 
@@ -211,6 +211,39 @@ static void allocate_block(uint64_t *ptr, uint64_t size) {
 }
 
 /*
+ * coalesce: coalesces the current block with the adjacent block if it is free
+ */
+static void coalesce(uint64_t *ptr){
+
+    uint64_t block_size = get_block_size(ptr);
+    uint64_t is_previous_allocated = get_is_allocated(get_prev_block(ptr));
+    uint64_t is_next_allocated = get_is_allocated(get_next_block(ptr));
+
+
+    if(is_previous_allocated == 1 && is_next_allocated == 1){
+        return;
+    }
+    else if(is_previous_allocated == 0 && is_next_allocated == 1){
+        block_size += get_block_size(get_prev_block(ptr));
+        write_block(get_prev_block(ptr), pack(block_size, 0));
+        write_block(get_footer(ptr), pack(block_size, 0));
+    }
+    else if(is_previous_allocated == 1 && is_next_allocated == 0){
+        block_size += get_block_size(get_next_block(ptr));
+        write_block(ptr, pack(block_size, 0));
+        write_block(get_footer(ptr), pack(block_size, 0));
+    }
+    else{
+        block_size += get_block_size(get_prev_block(ptr)) + get_block_size(get_next_block(ptr));
+        write_block(get_prev_block(ptr), pack(block_size, 0));
+        write_block(get_footer(get_next_block(ptr)), pack(block_size, 0));
+    }
+
+    return; 
+}
+
+
+/*
  * mm_init: returns false on error, true on success.
  */
 bool mm_init(void)
@@ -268,7 +301,14 @@ void* malloc(size_t size)
 void free(void* ptr)
 {
     // IMPLEMENT THIS
+    uint64_t* header_ptr = get_header((uint64_t*)ptr);
+    uint64_t block_size = get_block_size(header_ptr);
 
+    write_block(header_ptr, pack(block_size, 0)); // new free block header
+    write_block(get_footer(ptr), pack(block_size, 0)); // new free block footer
+
+    //coalesce if possible
+    coalesce(header_ptr);
 
     return;
 }
