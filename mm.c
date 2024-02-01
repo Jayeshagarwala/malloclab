@@ -177,12 +177,12 @@ static uint64_t* coalesce(uint64_t *ptr){
         block_size += get_block_size(get_prev_block(ptr));
         write_block(get_prev_block(ptr), pack(block_size, 0));
         write_block(get_footer(ptr), pack(block_size, 0));
+        ptr = get_prev_block(ptr);
     }
     else if(is_previous_allocated == 1 && is_next_allocated == 0){
         block_size += get_block_size(get_next_block(ptr));
         write_block(ptr, pack(block_size, 0));
         write_block(get_footer(ptr), pack(block_size, 0));
-        ptr = get_prev_block(ptr);
     }
     else{
         block_size += get_block_size(get_prev_block(ptr)) + get_block_size(get_next_block(ptr));
@@ -301,6 +301,10 @@ void* malloc(size_t size)
 void free(void* ptr)
 {
     // IMPLEMENT THIS
+
+    if (ptr == NULL)
+        return;
+
     uint64_t* header_ptr = get_header(ptr);
     uint64_t block_size = get_block_size(header_ptr);
 
@@ -320,6 +324,35 @@ void free(void* ptr)
 void* realloc(void* oldptr, size_t size)
 {
     // IMPLEMENT THIS
+    if(oldptr == NULL){
+        return malloc(size);
+    }
+
+    if(size == 0){
+        free(oldptr);
+        return NULL;
+    }
+
+    uint64_t* old_block_ptr = get_header(oldptr);
+    uint64_t old_block_size = get_block_size(old_block_ptr);
+    uint64_t new_block_size = (uint64_t)align(size + HEADER_SIZE + FOOTER_SIZE);
+
+    if(old_block_size == new_block_size){
+        return oldptr;
+    }
+    else if(old_block_size > new_block_size){
+        allocate_block(old_block_ptr, new_block_size);
+        return oldptr;
+    }
+    else{
+        uint64_t* new_block_ptr = malloc(size);
+        if(new_block_ptr == NULL){
+            return NULL;
+        }
+        memcpy(new_block_ptr, oldptr, old_block_size - HEADER_SIZE - FOOTER_SIZE);
+        free(oldptr);
+        return new_block_ptr;
+    }
     
     return NULL;
 }

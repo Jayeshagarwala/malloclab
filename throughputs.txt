@@ -1,2 +1,0 @@
-Intel(R)Xeon(R)CPUE5-1620v3@3.50GHz:regular:20092
-Intel(R)Core(TM)i5-6267UCPU@2.90GHz:regular:15928
