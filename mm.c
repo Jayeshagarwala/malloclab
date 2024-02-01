@@ -3,11 +3,14 @@
  *
  * Name: Jayesh Agarwala
  *
- * NOTE TO STUDENTS: Replace this header comment with your own header
- * comment that gives a high level description of your solution.
- * Also, read the README carefully and in its entirety before beginning.
+ * This is a simple, segregated, implicit free list memory allocator
+ * with implementation of malloc, free and realloc functions.
  *
+ * References:
+ * 1. Computer System's A Programmer's Perspective by Randal E. Bryant and David R. O'Hallaron (Chapter 9.9)
+ * 2. CMPSC 473 Lecture Slides: Dynamic Memory Allocation by Timothy Zhu (Penn State University) 
  */
+
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -241,7 +244,6 @@ static void allocate_block(uint64_t *ptr, uint64_t size) {
     }
 
 }
-
 
 /*
  * mm_init: returns false on error, true on success.
