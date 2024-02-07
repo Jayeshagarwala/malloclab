@@ -188,29 +188,53 @@ static uint64_t* get_block_payload(uint64_t *ptr) {
 static uint64_t* coalesce(uint64_t *ptr){
 
     uint64_t block_size = get_block_size(ptr);
-    uint64_t is_previous_allocated = get_is_allocated(get_prev_block(ptr));
-    uint64_t is_next_allocated = get_is_allocated(get_next_block(ptr));
+    uint64_t* prev_block = get_prev_block(ptr);
+    uint64_t* next_block = get_next_block(ptr);
+    uint64_t is_previous_allocated = get_is_allocated(prev_block);
+    uint64_t is_next_allocated = get_is_allocated(next_block);
 
     if(is_previous_allocated == 1 && is_next_allocated == 1){
         return ptr;
     }
     else if(is_previous_allocated == 0 && is_next_allocated == 1){
-        block_size += get_block_size(get_prev_block(ptr));
-        write_block(get_prev_block(ptr), pack(block_size, 0));
+
+        remove_free_block(get_block_payload(prev_block));
+        remove_free_block(get_block_payload(ptr));
+
+        block_size += get_block_size(prev_block);
+        write_block(prev_block, pack(block_size, 0));
         write_block(get_footer(ptr), pack(block_size, 0));
-        ptr = get_prev_block(ptr);
+        
+        ptr = prev_block;
+
     }
     else if(is_previous_allocated == 1 && is_next_allocated == 0){
-        block_size += get_block_size(get_next_block(ptr));
+
+        remove_free_block(get_block_payload(next_block));
+        remove_free_block(get_block_payload(ptr));
+
+        block_size += get_block_size(next_block);
         write_block(ptr, pack(block_size, 0));
         write_block(get_footer(ptr), pack(block_size, 0));
+
     }
     else{
-        block_size += get_block_size(get_prev_block(ptr)) + get_block_size(get_next_block(ptr));
+
+        remove_free_block(get_block_payload(next_block));
+        remove_free_block(get_block_payload(ptr));
+        remove_free_block(get_block_payload(prev_block));
+
+        block_size += get_block_size(prev_block) + get_block_size(next_block);
         write_block(get_prev_block(ptr), pack(block_size, 0));
-        write_block(get_footer(get_next_block(ptr)), pack(block_size, 0));
-        ptr = get_prev_block(ptr);
+        write_block(get_footer(next_block), pack(block_size, 0));
+
+        ptr = prev_block;
+
     }
+
+    free_list_node_t* new_free_block = (free_list_node_t*)get_block_payload(ptr);
+    insert_free_block(new_free_block);
+    write_block(get_block_payload, new_free_block); // set the payload to the free list node
 
     return ptr; 
 }
@@ -232,6 +256,10 @@ static uint64_t* expand_heap(uint64_t new_block_size)
     write_block(new_block_ptr, pack(new_block_size, 0)); // New block header
     write_block(get_footer(new_block_ptr), pack(new_block_size, 0)); // New block footer
     write_block(get_next_block(new_block_ptr), pack(0, 1)); // New epilogue header
+
+    free_list_node_t* new_free_block = (free_list_node_t*)get_block_payload(new_block_ptr);
+    insert_free_block(new_free_block);
+    write_block(get_block_payload, new_free_block); // set the payload to the free list node
 
     return coalesce(new_block_ptr);
 
@@ -264,7 +292,7 @@ static void insert_free_block(free_list_node_t* free_block) {
 static void remove_free_block(free_list_node_t* free_block) {
 
     // If the free block is the head of the free list
-    if (free_list.head == free_block) {
+    if (free_block == free_list.head) {
         // if free block is the only block in the free list
         if (free_block->next == free_block) {
             free_list.head->next = NULL;
@@ -409,7 +437,6 @@ void free(void* ptr)
     write_block(header_ptr, pack(block_size, 0)); // new free block header
 
     insert_free_block(free_block);
-
     write_block(ptr, free_block); // set the payload to the free list node
     
     //coalesce if possible
