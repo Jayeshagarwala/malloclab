@@ -68,6 +68,25 @@ static size_t align(size_t x)
 }
 
 /*
+ * structure of the free list which is a circular doubly linked list with head pointer
+ */
+
+typedef struct free_list_node {
+    struct free_list_node* prev;
+    struct free_list_node* next;
+} free_list_node_t;
+
+/*
+ * structure of the free list head
+ */
+
+typedef struct free_list {
+    free_list_node_t* head;
+} free_list_t;
+
+free_list_t free_list;
+
+/*
  * read_block: reads a word at address ptr
  */
 
@@ -86,7 +105,6 @@ static void write_block(uint64_t *ptr, uint64_t val) {
     *((uint64_t *)ptr) = val;
 
 }
-
 
 /*
  * pack: packs a size and allocated bit into a word
@@ -218,6 +236,69 @@ static uint64_t* expand_heap(uint64_t new_block_size)
     return coalesce(new_block_ptr);
 
 }
+
+
+/*
+ * insert_free_block: inserts a free block into the free list
+ */
+
+static void insert_free_block(free_list_node_t* free_block) {
+
+    if (free_list.head == NULL) {
+        free_list.head = free_block;
+        free_block->next = free_block;
+        free_block->prev = free_block;
+    } else {
+        free_block->next = free_list.head;
+        free_block->prev = free_list.head->prev;
+        free_list.head->prev->next = free_block;
+        free_list.head->prev = free_block;
+    }
+
+}
+
+/*
+ * remove_free_block: removes a free block from the free list
+ */
+
+static void remove_free_block(free_list_node_t* free_block) {
+
+    if (free_list.head == free_block) {
+        if (free_block->next == free_block) {
+            free_list.head = NULL;
+        } else {
+            free_list.head = free_block->next;
+        }
+    }
+
+    free_block->prev->next = free_block->next;
+    free_block->next->prev = free_block->prev;
+    free_block->next = NULL;
+    free_block->prev = NULL;
+
+}
+
+
+
+/*
+ * find_first_fit: finds the first fit free block of size size
+ */
+
+static uint64_t* find_first_fit(uint64_t size) {
+
+    uint64_t *current_block_ptr;
+
+    //search for a free block of sufficient size
+    for (current_block_ptr = prologue_ptr; get_block_size(current_block_ptr) > 0; current_block_ptr = get_next_block(current_block_ptr)){
+        if(get_is_allocated(current_block_ptr) == 0 && get_block_size(current_block_ptr) >= size){
+            return current_block_ptr;
+        }
+    }
+
+    return NULL;
+
+}
+
 /*
  * allocate_block: allocates a block of size size
  */
@@ -254,6 +335,7 @@ bool mm_init(void)
 
     //Create the initial empty heap
     prologue_ptr = (uint64_t *)mem_sbrk(PADDING_SIZE + PROLOGUE_SIZE + EPILOGUE_SIZE);
+    free_list.head = NULL; 
 
     if (prologue_ptr == (void *)-1)
         return false;
@@ -275,15 +357,15 @@ void* malloc(size_t size)
 {
     // IMPLEMENT THIS
 
-    uint64_t current_block_size = (uint64_t)align(size + HEADER_SIZE + FOOTER_SIZE);
-    uint64_t *current_block_ptr;
+    if (size < 1)
+        return NULL;
 
-    //search for a free block of sufficient size
-    for (current_block_ptr = prologue_ptr; get_block_size(current_block_ptr) > 0; current_block_ptr = get_next_block(current_block_ptr)){
-        if(get_is_allocated(current_block_ptr) == 0 && get_block_size(current_block_ptr) >= current_block_size){
-            allocate_block(current_block_ptr, current_block_size);
-            return get_block_payload(current_block_ptr);
-        }
+    uint64_t current_block_size = (uint64_t)align(size + HEADER_SIZE + FOOTER_SIZE);
+    uint64_t *free_block_ptr;
+
+    if (free_block_ptr  != NULL){
+        allocate_block(free_block_ptr, current_block_size);
+        return get_block_payload(free_block_ptr);
     }
 
     //if no free block of sufficient size is found, expand the heap
@@ -309,7 +391,8 @@ void free(void* ptr)
 
     uint64_t* header_ptr = get_header(ptr);
     uint64_t block_size = get_block_size(header_ptr);
-
+    free_list_node_t* free_block = (free_list_node_t*)ptr;
+    
     write_block(get_footer(header_ptr), pack(block_size, 0)); // new free block footer
     write_block(header_ptr, pack(block_size, 0)); // new free block header
     
