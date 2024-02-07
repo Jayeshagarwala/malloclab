@@ -183,90 +183,6 @@ static uint64_t* get_block_payload(uint64_t *ptr) {
 }
 
 /*
- * coalesce: coalesces the current block with the adjacent block if it is free and returns the new block head pointer
- */
-static uint64_t* coalesce(uint64_t *ptr){
-
-    uint64_t block_size = get_block_size(ptr);
-    uint64_t* prev_block = get_prev_block(ptr);
-    uint64_t* next_block = get_next_block(ptr);
-    uint64_t is_previous_allocated = get_is_allocated(prev_block);
-    uint64_t is_next_allocated = get_is_allocated(next_block);
-
-    if(is_previous_allocated == 1 && is_next_allocated == 1){
-        return ptr;
-    }
-    else if(is_previous_allocated == 0 && is_next_allocated == 1){
-
-        remove_free_block(get_block_payload(prev_block));
-        remove_free_block(get_block_payload(ptr));
-
-        block_size += get_block_size(prev_block);
-        write_block(prev_block, pack(block_size, 0));
-        write_block(get_footer(ptr), pack(block_size, 0));
-        
-        ptr = prev_block;
-
-    }
-    else if(is_previous_allocated == 1 && is_next_allocated == 0){
-
-        remove_free_block(get_block_payload(next_block));
-        remove_free_block(get_block_payload(ptr));
-
-        block_size += get_block_size(next_block);
-        write_block(ptr, pack(block_size, 0));
-        write_block(get_footer(ptr), pack(block_size, 0));
-
-    }
-    else{
-
-        remove_free_block(get_block_payload(next_block));
-        remove_free_block(get_block_payload(ptr));
-        remove_free_block(get_block_payload(prev_block));
-
-        block_size += get_block_size(prev_block) + get_block_size(next_block);
-        write_block(get_prev_block(ptr), pack(block_size, 0));
-        write_block(get_footer(next_block), pack(block_size, 0));
-
-        ptr = prev_block;
-
-    }
-
-    free_list_node_t* new_free_block = (free_list_node_t*)get_block_payload(ptr);
-    insert_free_block(new_free_block);
-    write_block(get_block_payload, new_free_block); // set the payload to the free list node
-
-    return ptr; 
-}
-
-/*
- * expand_heap: expands the heap by new_block_size bytes and returns the pointer to the new block
- */
-
-static uint64_t* expand_heap(uint64_t new_block_size)
-{
-
-    uint64_t* new_block_ptr = (uint64_t *)mem_sbrk(new_block_size);
-
-    if (new_block_ptr == (void *)-1)
-        return NULL;
-    
-    new_block_ptr -= (HEADER_SIZE/UINT64_T_SIZE); // New block header
-
-    write_block(new_block_ptr, pack(new_block_size, 0)); // New block header
-    write_block(get_footer(new_block_ptr), pack(new_block_size, 0)); // New block footer
-    write_block(get_next_block(new_block_ptr), pack(0, 1)); // New epilogue header
-
-    free_list_node_t* new_free_block = (free_list_node_t*)get_block_payload(new_block_ptr);
-    insert_free_block(new_free_block);
-    write_block(get_block_payload, new_free_block); // set the payload to the free list node
-
-    return coalesce(new_block_ptr);
-
-}
-
-
-/*
  * insert_free_block: inserts a free block into the free list
  */
 
@@ -312,6 +228,89 @@ static void remove_free_block(free_list_node_t* free_block) {
 
 }
 
+/*
+ * coalesce: coalesces the current block with the adjacent block if it is free and returns the new block head pointer
+ */
+static uint64_t* coalesce(uint64_t *ptr){
+
+    uint64_t block_size = get_block_size(ptr);
+    uint64_t* prev_block = get_prev_block(ptr);
+    uint64_t* next_block = get_next_block(ptr);
+    uint64_t is_previous_allocated = get_is_allocated(prev_block);
+    uint64_t is_next_allocated = get_is_allocated(next_block);
+
+    if(is_previous_allocated == 1 && is_next_allocated == 1){
+        return ptr;
+    }
+    else if(is_previous_allocated == 0 && is_next_allocated == 1){
+
+        remove_free_block((free_list_node_t*)get_block_payload(prev_block));
+        remove_free_block((free_list_node_t*)get_block_payload(ptr));
+
+        block_size += get_block_size(prev_block);
+        write_block(prev_block, pack(block_size, 0));
+        write_block(get_footer(ptr), pack(block_size, 0));
+        
+        ptr = prev_block;
+
+    }
+    else if(is_previous_allocated == 1 && is_next_allocated == 0){
+
+        remove_free_block((free_list_node_t*)get_block_payload(next_block));
+        remove_free_block((free_list_node_t*)get_block_payload(ptr));
+
+        block_size += get_block_size(next_block);
+        write_block(ptr, pack(block_size, 0));
+        write_block(get_footer(ptr), pack(block_size, 0));
+
+    }
+    else{
+
+        remove_free_block((free_list_node_t*)get_block_payload(next_block));
+        remove_free_block((free_list_node_t*)get_block_payload(ptr));
+        remove_free_block((free_list_node_t*)get_block_payload(prev_block));
+
+        block_size += get_block_size(prev_block) + get_block_size(next_block);
+        write_block(get_prev_block(ptr), pack(block_size, 0));
+        write_block(get_footer(next_block), pack(block_size, 0));
+
+        ptr = prev_block;
+
+    }
+
+    free_list_node_t* new_free_block = (free_list_node_t*)get_block_payload(ptr);
+    insert_free_block(new_free_block);
+    write_block(get_block_payload(ptr),(uint64_t) &new_free_block); // set the payload to the free list node
+
+    return ptr; 
+}
+
+/*
+ * expand_heap: expands the heap by new_block_size bytes and returns the pointer to the new block
+ */
+
+static uint64_t* expand_heap(uint64_t new_block_size)
+{
+
+    uint64_t* new_block_ptr = (uint64_t *)mem_sbrk(new_block_size);
+
+    if (new_block_ptr == (void *)-1)
+        return NULL;
+    
+    new_block_ptr -= (HEADER_SIZE/UINT64_T_SIZE); // New block header
+
+    write_block(new_block_ptr, pack(new_block_size, 0)); // New block header
+    write_block(get_footer(new_block_ptr), pack(new_block_size, 0)); // New block footer
+    write_block(get_next_block(new_block_ptr), pack(0, 1)); // New epilogue header
+
+    free_list_node_t* new_free_block = (free_list_node_t*)get_block_payload(new_block_ptr);
+    insert_free_block(new_free_block);
+    write_block(get_block_payload(new_block_ptr), (uint64_t) &new_free_block); // set the payload to the free list node
+
+    return coalesce(new_block_ptr);
+
+}
+
 
 /*
  * find_first_fit: finds the first fit free block of size size
@@ -325,10 +324,10 @@ static uint64_t* find_first_fit(uint64_t size) {
         return NULL;
 
     //search for a free block of sufficient size
-    for (current_block_ptr = free_list.head; get_block_size(get_header(current_block_ptr)) > 0; current_block_ptr = current_block_ptr->next) {
-        if(get_block_size(get_header(current_block_ptr)) >= size){
+    for (current_block_ptr = free_list.head; get_block_size(get_header((uint64_t *)current_block_ptr)) > 0; current_block_ptr = current_block_ptr->next) {
+        if(get_block_size(get_header((uint64_t *)current_block_ptr)) >= size){
             remove_free_block(current_block_ptr);
-            return get_header(current_block_ptr);
+            return get_header((uint64_t *)current_block_ptr);
         }
         else if(current_block_ptr == free_list.head->prev){
             return NULL;
@@ -401,9 +400,9 @@ void* malloc(size_t size)
         return NULL;
 
     uint64_t current_block_size = (uint64_t)align(size + HEADER_SIZE + FOOTER_SIZE);
-    uint64_t *free_block_ptr;
+    uint64_t *free_block_ptr = find_first_fit(current_block_size);
 
-    if (free_block_ptr  != NULL){
+    if (free_block_ptr != NULL){
         allocate_block(free_block_ptr, current_block_size);
         return get_block_payload(free_block_ptr);
     }
@@ -437,7 +436,7 @@ void free(void* ptr)
     write_block(header_ptr, pack(block_size, 0)); // new free block header
 
     insert_free_block(free_block);
-    write_block(ptr, free_block); // set the payload to the free list node
+    write_block(ptr,(uint64_t) &free_block); // set the payload to the free list node
     
     //coalesce if possible
     coalesce(header_ptr);
