@@ -95,7 +95,7 @@
  * Students can get more points for building more efficient allocators,
  * up to this point (1 is perfect).
  */
-#define MAX_SPACE_CHECKPOINT 0.64
+#define MAX_SPACE_CHECKPOINT 0.59
 #define MAX_SPACE       0.74
 
  /*

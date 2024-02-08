@@ -229,7 +229,7 @@ static void remove_free_block(free_list_node_t* free_block) {
 }
 
 /*
- * coalesce: coalesces the current block with the adjacent block if it is free and returns the new block head pointer
+ * coalesce: coalesces the current free block with the adjacent free block and returns the new block head pointer
  */
 static uint64_t* coalesce(uint64_t *ptr){
 
@@ -280,7 +280,7 @@ static uint64_t* coalesce(uint64_t *ptr){
 
     free_list_node_t* new_free_block = (free_list_node_t*)get_block_payload(ptr);
     insert_free_block(new_free_block);
-    write_block(get_block_payload(ptr),(uint64_t) &new_free_block); // set the payload to the free list node
+    write_block(get_block_payload(ptr),*((uint64_t *)new_free_block)); // set the payload to the free list node
 
     return ptr; 
 }
@@ -305,7 +305,7 @@ static uint64_t* expand_heap(uint64_t new_block_size)
 
     free_list_node_t* new_free_block = (free_list_node_t*)get_block_payload(new_block_ptr);
     insert_free_block(new_free_block);
-    write_block(get_block_payload(new_block_ptr), (uint64_t) &new_free_block); // set the payload to the free list node
+    write_block(get_block_payload(new_block_ptr), *((uint64_t *) new_free_block)); // set the payload to the free list node
 
     return coalesce(new_block_ptr);
 
@@ -352,8 +352,15 @@ static void allocate_block(uint64_t *ptr, uint64_t size) {
 
         write_block(ptr, pack(size, 1)); // New allocated block header
         write_block(get_footer(ptr), pack(size, 1)); // New allocated block footer
-        write_block(get_next_block(ptr), pack(block_size - size, 0)); // New free block header
-        write_block(get_footer(get_next_block(ptr)), pack(block_size - size, 0)); // New free block footer
+
+        uint64_t* new_free_block = get_next_block(ptr);
+        write_block(new_free_block, pack(block_size - size, 0)); // New free block header
+        write_block(get_footer(new_free_block), pack(block_size - size, 0)); // New free block footer
+
+        free_list_node_t* new_free_block_payload = (free_list_node_t*)get_block_payload(new_free_block);
+        insert_free_block(new_free_block_payload);
+        write_block(get_block_payload(new_free_block), *((uint64_t *) new_free_block_payload)); // set the payload to the free list node
+
 
     } else {
         //allocated all the remaining memory to the allocated block
@@ -413,6 +420,7 @@ void* malloc(size_t size)
     if (new_block_ptr == NULL)
         return NULL;
 
+    remove_free_block((free_list_node_t*)get_block_payload(new_block_ptr));
     allocate_block(new_block_ptr, current_block_size);
     return get_block_payload(new_block_ptr);
 
@@ -436,7 +444,7 @@ void free(void* ptr)
     write_block(header_ptr, pack(block_size, 0)); // new free block header
 
     insert_free_block(free_block);
-    write_block(ptr,(uint64_t) &free_block); // set the payload to the free list node
+    write_block(ptr,*((uint64_t *) free_block)); // set the payload to the free list node
     
     //coalesce if possible
     coalesce(header_ptr);
