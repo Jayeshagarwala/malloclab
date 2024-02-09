@@ -186,7 +186,7 @@ static uint64_t* get_block_payload(uint64_t *ptr) {
  * insert_free_block: inserts a free block into the free list
  */
 
-static void insert_free_block(free_list_node_t* free_block) {
+static void __attribute__ ((noinline)) insert_free_block(free_list_node_t* free_block) {
 
     if (free_list.head == NULL) {
         free_list.head = free_block;
@@ -205,7 +205,7 @@ static void insert_free_block(free_list_node_t* free_block) {
  * remove_free_block: removes a free block from the free list
  */
 
-static void remove_free_block(free_list_node_t* free_block) {
+static void __attribute__ ((noinline)) remove_free_block(free_list_node_t* free_block) {
 
     // If the free block is the head of the free list
     if (free_block == free_list.head) {
