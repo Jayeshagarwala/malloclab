@@ -27,7 +27,7 @@
  * uncomment the following line. Be sure not to have debugging enabled
  * in your final submission.
  */
-// #define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
 // When debugging is enabled, the underlying functions get called
@@ -424,6 +424,7 @@ static uint64_t* find_first_fit(uint64_t size) {
 
 static void allocate_block(uint64_t *ptr, uint64_t size) {
 
+
     uint64_t block_size = get_block_size(ptr);
 
     if (block_size - size > (HEADER_SIZE + FOOTER_SIZE)) {
@@ -458,10 +459,7 @@ static void allocate_block(uint64_t *ptr, uint64_t size) {
 
         write_block(next_block_ptr, packHeader(next_block_size, is_next_allocated, 1)); // update header of next block with previous allocated bit
 
-
     }
-
-    
 
 
 }
@@ -501,6 +499,7 @@ bool mm_init(void)
 void* malloc(size_t size)
 {
     // IMPLEMENT THIS
+
 
     if (size < 1)
         return NULL;
@@ -572,6 +571,7 @@ void free(void* ptr)
 void* realloc(void* oldptr, size_t size)
 {
     // IMPLEMENT THIS
+
     if(oldptr == NULL){
         return malloc(size);
     }
@@ -653,6 +653,103 @@ bool mm_checkheap(int line_number)
 #ifdef DEBUG
     // Write code to check heap invariants here
     // IMPLEMENT THIS
+
+    uint64_t* current_block_ptr = prologue_ptr;
+
+    while(current_block_ptr != epilogue_ptr){
+
+        uint64_t current_block_size = get_block_size(current_block_ptr);
+
+        //check if every block is 16-byte aligned
+        if(current_block_size % 16 != 0){
+            dbg_printf("Error: Block at %p is not 16-byte aligned\n", current_block_ptr);
+        }
+        
+        //check if contiguous free blocks escaped coalescing
+        if(get_is_allocated(current_block_ptr) == 0 && get_is_prev_allocated(current_block_ptr) == 0){
+            dbg_printf("Error: Contiguous free blocks at %p and %p escaped coalescing\n", get_prev_block(current_block_ptr), current_block_ptr);
+        }
+
+        //check if the header and footer of each free block match
+        //check for size bits
+        if(get_is_allocated(current_block_ptr) == 0 && get_block_size(current_block_ptr) != get_block_size(get_footer(current_block_ptr))){
+            dbg_printf("Error: Header and footer of free block at %p do not match in size bits\n", current_block_ptr);
+        }
+        //check for allocated bits
+        if(get_is_allocated(current_block_ptr) == 0 && get_is_allocated(current_block_ptr) != get_is_allocated(get_footer(current_block_ptr))){
+            dbg_printf("Error: Header and footer of free block at %p do not match in allocated bits\n", current_block_ptr);
+        }
+        
+        //check if any block exceed heap size
+        if(get_block_size(current_block_ptr) > mem_heapsize()){
+            dbg_printf("Error: Block at %p exceeds heap size\n", current_block_ptr);
+        }
+
+        //check if any block is outside the heap
+        if(!in_heap(current_block_ptr)){
+            dbg_printf("Error: Block at %p is outside the heap\n", current_block_ptr);
+        }
+
+        current_block_ptr = get_next_block(current_block_ptr);
+
+
+    }
+
+    for(int i = 0; i<14 ;i++){
+
+        if (free_list[i].head != NULL){
+            free_list_node_t *current_block_ptr = free_list[i].head;
+            do{
+                //check if any allocated block is in the free list
+                if(get_is_allocated(get_header((uint64_t *)current_block_ptr)) == 1){
+                    dbg_printf("Error: Allocated block at %p is in the free list\n", get_header((uint64_t *)current_block_ptr));
+                }
+
+                //check if the next block pointer in consistent
+                if(current_block_ptr->next != NULL){
+                    //check if the next is pointing inside the heap
+                    if(!in_heap(get_header((uint64_t *)current_block_ptr->next))){
+                        dbg_printf("Error: Next pointer of block at %p is outside the heap\n", get_header((uint64_t *)current_block_ptr));
+                    }
+                    //check if the next block is pointing to a free block
+                    if(get_is_allocated(get_header((uint64_t *)current_block_ptr->next)) == 1){
+                        dbg_printf("Error: Next pointer of block at %p is pointing to an allocated block\n", get_header((uint64_t *)current_block_ptr));
+                    }
+                    //check if the next block is pointing to a block in the same free list
+                    if(get_list_index(get_block_size(get_header((uint64_t *)current_block_ptr->next))) != i){
+                        dbg_printf("Error: Next pointer of block at %p is pointing to a block in a different free list\n", get_header((uint64_t *)current_block_ptr));
+                    }
+                }
+
+                //check if the prev block pointer in consistent
+                if(current_block_ptr->prev != NULL){
+                    //check if the prev is pointing inside the heap
+                    if(!in_heap(get_header((uint64_t *)current_block_ptr->prev))){
+                        dbg_printf("Error: Prev pointer of block at %p is outside the heap\n", get_header((uint64_t *)current_block_ptr));
+                    }
+                    //check if the prev block is pointing to a free block
+                    if(get_is_allocated(get_header((uint64_t *)current_block_ptr->prev)) == 1){
+                        dbg_printf("Error: Prev pointer of block at %p is pointing to an allocated block\n", get_header((uint64_t *)current_block_ptr));
+                    }
+                    //check if the prev block is pointing to a block in the same free list
+                    if(get_list_index(get_block_size(get_header((uint64_t *)current_block_ptr->prev))) != i){
+                        dbg_printf("Error: Prev pointer of block at %p is pointing to a block in a different free list\n", get_header((uint64_t *)current_block_ptr));
+                    }
+                }
+                
+                //check if the free block is in correct free list
+                if(get_list_index(get_block_size(get_header((uint64_t *)current_block_ptr))) != i){
+                    dbg_printf("Error: Free block at %p is in wrong free list\n", get_header((uint64_t *)current_block_ptr));
+                }
+
+                current_block_ptr = current_block_ptr->next;
+                
+            } while(current_block_ptr != free_list[i].head);
+            
+            
+        }
+    }
+
 #endif // DEBUG
     return true;
 }
