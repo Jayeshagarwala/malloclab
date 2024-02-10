@@ -307,22 +307,21 @@ static void __attribute__ ((noinline)) remove_free_block(free_list_node_t* free_
 static uint64_t* coalesce(uint64_t *ptr){
 
     uint64_t block_size = get_block_size(ptr);
-    uint64_t* prev_block = get_prev_block(ptr);
     uint64_t* next_block = get_next_block(ptr);
-    uint64_t is_previous_allocated = get_is_allocated(prev_block);
+    uint64_t is_previous_allocated = get_is_prev_allocated(ptr);
     uint64_t is_next_allocated = get_is_allocated(next_block);
 
     if(is_previous_allocated == 1 && is_next_allocated == 1){
         return ptr;
     }
     else if(is_previous_allocated == 0 && is_next_allocated == 1){
-
+        uint64_t* prev_block = get_prev_block(ptr);
         remove_free_block((free_list_node_t*)get_block_payload(prev_block), get_list_index(get_block_size(prev_block)));
         remove_free_block((free_list_node_t*)get_block_payload(ptr), get_list_index(get_block_size(ptr)));
 
         block_size += get_block_size(prev_block);
-        write_block(prev_block, pack(block_size, 0));
-        write_block(get_footer(ptr), pack(block_size, 0));
+        write_block(prev_block, packHeader(block_size, 0, 1));
+        write_block(get_footer(ptr), packFooter(block_size, 0));
         
         ptr = prev_block;
 
@@ -333,19 +332,19 @@ static uint64_t* coalesce(uint64_t *ptr){
         remove_free_block((free_list_node_t*)get_block_payload(ptr), get_list_index(get_block_size(ptr)));
 
         block_size += get_block_size(next_block);
-        write_block(ptr, pack(block_size, 0));
-        write_block(get_footer(ptr), pack(block_size, 0));
+        write_block(ptr, packHeader(block_size, 0, 1));
+        write_block(get_footer(ptr), packFooter(block_size, 0));
 
     }
     else{
-
+        uint64_t* prev_block = get_prev_block(ptr);
         remove_free_block((free_list_node_t*)get_block_payload(next_block), get_list_index(get_block_size(next_block)));
         remove_free_block((free_list_node_t*)get_block_payload(ptr), get_list_index(get_block_size(ptr)));
         remove_free_block((free_list_node_t*)get_block_payload(prev_block), get_list_index(get_block_size(prev_block)));
 
         block_size += get_block_size(prev_block) + get_block_size(next_block);
-        write_block(get_prev_block(ptr), pack(block_size, 0));
-        write_block(get_footer(next_block), pack(block_size, 0));
+        write_block(get_prev_block(ptr), packHeader(block_size, 0, 1));
+        write_block(get_footer(next_block), packFooter(block_size, 0));
 
         ptr = prev_block;
 
@@ -369,12 +368,13 @@ static uint64_t* expand_heap(uint64_t new_block_size)
 
     if (new_block_ptr == (void *)-1)
         return NULL;
-    
     new_block_ptr -= (HEADER_SIZE/UINT64_T_SIZE); // New block header
+    int is_prev_allocated = get_is_prev_allocated(new_block_ptr);
 
-    write_block(new_block_ptr, pack(new_block_size, 0)); // New block header
-    write_block(get_footer(new_block_ptr), pack(new_block_size, 0)); // New block footer
-    write_block(get_next_block(new_block_ptr), pack(0, 1)); // New epilogue header
+    write_block(new_block_ptr, packHeader(new_block_size, 0, is_prev_allocated)); // New block header
+    write_block(get_footer(new_block_ptr), packFooter(new_block_size, 0)); // New block footer
+    write_block(get_next_block(new_block_ptr), packHeader(0, 1, 0)); // New epilogue header
+    epilogue_ptr = get_next_block(new_block_ptr);
 
     int index = get_list_index(new_block_size);
 
@@ -429,26 +429,36 @@ static void allocate_block(uint64_t *ptr, uint64_t size) {
 
         //divided allocated block memory and remaining free memory
 
-        write_block(ptr, pack(size, 1)); // New allocated block header
-        write_block(get_footer(ptr), pack(size, 1)); // New allocated block footer
+        write_block(ptr, packHeader(size, 1, get_is_prev_allocated(ptr))); // New allocated block header
 
         uint64_t* new_free_block = get_next_block(ptr);
-        write_block(new_free_block, pack(block_size - size, 0)); // New free block header
-        write_block(get_footer(new_free_block), pack(block_size - size, 0)); // New free block footer
+        write_block(new_free_block, packHeader(block_size - size, 0, 1)); // New free block header
+        write_block(get_footer(new_free_block), packFooter(block_size - size, 0)); // New free block footer
 
         free_list_node_t* new_free_block_payload = (free_list_node_t*)get_block_payload(new_free_block);
         int index = get_list_index(block_size - size);
         insert_free_block(new_free_block_payload, index);
         write_block(get_block_payload(new_free_block), *((uint64_t *) new_free_block_payload)); // set the payload to the free list node
 
-
     } else {
         //allocated all the remaining memory to the allocated block
 
-        write_block(ptr, pack(block_size, 1)); // New allocated block header
-        write_block(get_footer(ptr), pack(block_size, 1)); // New allocated block footer
+        write_block(ptr, packHeader(block_size, 1, get_is_prev_allocated(ptr))); // New allocated block header
+
+        uint64_t* next_block_ptr = get_next_block(ptr);
+        uint64_t next_block_size = get_block_size(next_block_ptr);
+        uint64_t is_next_allocated = get_is_allocated(next_block_ptr);
+        
+        write_block(next_block_ptr, packHeader(0, 1, 0)); // update header of next block with previous allocated bit
+        if (next_block_ptr == epilogue_ptr) {
+            write_block(epilogue_ptr, packHeader(0, 1, 1)); // udate epilogue header with previous allocated bit
+        }
+        else{
+            write_block(next_block_ptr, packHeader(next_block_size, is_next_allocated, 1)); // update header of next block with previous allocated bit
+        }
 
     }
+
 
 }
 
@@ -470,11 +480,13 @@ bool mm_init(void)
         return false;
 
     write_block(prologue_ptr, 0); // Alignment padding
-    write_block(prologue_ptr + (PADDING_SIZE/UINT64_T_SIZE), pack(PROLOGUE_SIZE, 1)); // Prologue header
-    write_block(prologue_ptr + ((PADDING_SIZE + HEADER_SIZE)/UINT64_T_SIZE), pack(PROLOGUE_SIZE, 1)); // Prologue footer
-    write_block(prologue_ptr + ((PADDING_SIZE + PROLOGUE_SIZE)/UINT64_T_SIZE), pack(0, 1)); // Epilogue header
+    write_block(prologue_ptr + (PADDING_SIZE/UINT64_T_SIZE), packHeader(PROLOGUE_SIZE, 1, 0)); // Prologue header
+    write_block(prologue_ptr + ((PADDING_SIZE + HEADER_SIZE)/UINT64_T_SIZE), packFooter(PROLOGUE_SIZE, 1)); // Prologue footer
+    write_block(prologue_ptr + ((PADDING_SIZE + PROLOGUE_SIZE)/UINT64_T_SIZE), packHeader(0, 1, 1)); // Epilogue header
 
     prologue_ptr += (PADDING_SIZE /UINT64_T_SIZE);
+
+    epilogue_ptr = prologue_ptr + (PROLOGUE_SIZE/UINT64_T_SIZE);
 
     return true;
 }
@@ -489,7 +501,7 @@ void* malloc(size_t size)
     if (size < 1)
         return NULL;
 
-    uint64_t current_block_size = (uint64_t)align(size + HEADER_SIZE + FOOTER_SIZE);
+    uint64_t current_block_size = (uint64_t)align(size + HEADER_SIZE);
     uint64_t *free_block_ptr = find_first_fit(current_block_size);
 
     if (free_block_ptr != NULL){
@@ -522,9 +534,19 @@ void free(void* ptr)
     uint64_t* header_ptr = get_header(ptr);
     uint64_t block_size = get_block_size(header_ptr);
     free_list_node_t* free_block = (free_list_node_t*)ptr;
+
+    if (get_next_block(header_ptr) == epilogue_ptr) {
+        write_block(epilogue_ptr, packHeader(0, 1, 0)); // update epilogue header with previous allocated bit
+    }
     
-    write_block(get_footer(header_ptr), pack(block_size, 0)); // new free block footer
-    write_block(header_ptr, pack(block_size, 0)); // new free block header
+    write_block(get_footer(header_ptr), packFooter(block_size, 0)); // new free block footer
+    write_block(header_ptr, packHeader(block_size, 0, get_is_prev_allocated(header_ptr))); // new free block header
+
+    uint64_t* next_block_ptr = get_next_block(header_ptr);
+    uint64_t next_block_size = get_block_size(next_block_ptr);
+    uint64_t is_next_allocated = get_is_allocated(next_block_ptr);
+
+    write_block(next_block_ptr, packHeader(next_block_size, is_next_allocated, 0));
 
     insert_free_block(free_block, get_list_index(block_size));
     write_block(ptr,*((uint64_t *) free_block)); // set the payload to the free list node
@@ -553,7 +575,7 @@ void* realloc(void* oldptr, size_t size)
 
     uint64_t* old_block_ptr = get_header(oldptr);
     uint64_t old_block_size = get_block_size(old_block_ptr);
-    uint64_t new_block_size = (uint64_t)align(size + HEADER_SIZE + FOOTER_SIZE);
+    uint64_t new_block_size = (uint64_t)align(size + HEADER_SIZE);
 
     if(old_block_size == new_block_size){
         return oldptr;
@@ -567,7 +589,7 @@ void* realloc(void* oldptr, size_t size)
         if(new_block_ptr == NULL){
             return NULL;
         }
-        memcpy(new_block_ptr, oldptr, old_block_size - HEADER_SIZE - FOOTER_SIZE);
+        memcpy(new_block_ptr, oldptr, old_block_size - HEADER_SIZE);
         free(oldptr);
         return new_block_ptr;
     }
