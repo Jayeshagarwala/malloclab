@@ -368,8 +368,9 @@ static uint64_t* expand_heap(uint64_t new_block_size)
 
     if (new_block_ptr == (void *)-1)
         return NULL;
+    
     new_block_ptr -= (HEADER_SIZE/UINT64_T_SIZE); // New block header
-    int is_prev_allocated = get_is_prev_allocated(new_block_ptr);
+    uint64_t is_prev_allocated = get_is_prev_allocated(new_block_ptr);
 
     write_block(new_block_ptr, packHeader(new_block_size, 0, is_prev_allocated)); // New block header
     write_block(get_footer(new_block_ptr), packFooter(new_block_size, 0)); // New block footer
@@ -435,6 +436,12 @@ static void allocate_block(uint64_t *ptr, uint64_t size) {
         write_block(new_free_block, packHeader(block_size - size, 0, 1)); // New free block header
         write_block(get_footer(new_free_block), packFooter(block_size - size, 0)); // New free block footer
 
+        uint64_t* next_block_ptr = get_next_block(new_free_block);
+        uint64_t next_block_size = get_block_size(next_block_ptr);
+        uint64_t is_next_allocated = get_is_allocated(next_block_ptr);
+
+        write_block(next_block_ptr, packHeader(next_block_size, is_next_allocated, 0)); // update header of next block with previous allocated bit
+
         free_list_node_t* new_free_block_payload = (free_list_node_t*)get_block_payload(new_free_block);
         int index = get_list_index(block_size - size);
         insert_free_block(new_free_block_payload, index);
@@ -448,16 +455,13 @@ static void allocate_block(uint64_t *ptr, uint64_t size) {
         uint64_t* next_block_ptr = get_next_block(ptr);
         uint64_t next_block_size = get_block_size(next_block_ptr);
         uint64_t is_next_allocated = get_is_allocated(next_block_ptr);
-        
-        write_block(next_block_ptr, packHeader(0, 1, 0)); // update header of next block with previous allocated bit
-        if (next_block_ptr == epilogue_ptr) {
-            write_block(epilogue_ptr, packHeader(0, 1, 1)); // udate epilogue header with previous allocated bit
-        }
-        else{
-            write_block(next_block_ptr, packHeader(next_block_size, is_next_allocated, 1)); // update header of next block with previous allocated bit
-        }
+
+        write_block(next_block_ptr, packHeader(next_block_size, is_next_allocated, 1)); // update header of next block with previous allocated bit
+
 
     }
+
+    
 
 
 }
@@ -500,6 +504,10 @@ void* malloc(size_t size)
 
     if (size < 1)
         return NULL;
+
+    if (size < 16){
+        size = 16;
+    }
 
     uint64_t current_block_size = (uint64_t)align(size + HEADER_SIZE);
     uint64_t *free_block_ptr = find_first_fit(current_block_size);
@@ -575,6 +583,9 @@ void* realloc(void* oldptr, size_t size)
 
     uint64_t* old_block_ptr = get_header(oldptr);
     uint64_t old_block_size = get_block_size(old_block_ptr);
+    if (size < 16){
+        size = 16;
+    }
     uint64_t new_block_size = (uint64_t)align(size + HEADER_SIZE);
 
     if(old_block_size == new_block_size){
