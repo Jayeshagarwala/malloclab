@@ -108,13 +108,23 @@ static void write_block(uint64_t *ptr, uint64_t val) {
 }
 
 /*
- * pack: packs a size and allocated bit into a word
+ * packHeader: packs a size, current allocated bit and previous allocated bit into a word
  */
 
-static uint64_t pack(uint64_t size, uint64_t is_allocated) {
+static uint64_t packHeader(uint64_t size, uint64_t is_allocated, uint64_t is_prev_allocated) {
+
+    return  (uint64_t)(size | is_prev_allocated << 1 | is_allocated);
+}
+
+/*
+ * packFooter: packs a size and allocated bit into a word
+ */
+
+static uint64_t packFooter(uint64_t size, uint64_t is_allocated) {
 
     return  (uint64_t)(size | is_allocated);
 }
+
 
 /*
  * get_block_size: reads the block size from header or footer
@@ -134,6 +144,17 @@ static uint64_t get_is_allocated(uint64_t *ptr) {
     return read_block(ptr) & 0x1;
 
 }
+
+/*
+ * get_is_prev_allocated: reads if the previous block is allocated or not from header
+ */
+
+static uint64_t get_is_prev_allocated(uint64_t *ptr) {
+
+    return (read_block(ptr) & 0x2) >> 1;
+
+}
+
 
 /*
  * get_header: returns the header address of a block, given block payload pointer
@@ -505,7 +526,7 @@ void free(void* ptr)
     write_block(get_footer(header_ptr), pack(block_size, 0)); // new free block footer
     write_block(header_ptr, pack(block_size, 0)); // new free block header
 
-    insert_free_block(free_block);
+    insert_free_block(free_block, get_list_index(block_size));
     write_block(ptr,*((uint64_t *) free_block)); // set the payload to the free list node
     
     //coalesce if possible
