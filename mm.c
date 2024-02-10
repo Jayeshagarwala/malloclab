@@ -60,6 +60,7 @@
 #define UINT64_T_SIZE 8 
 
 uint64_t* prologue_ptr; 
+uint64_t* epilogue_ptr;
 
 // rounds up to the nearest multiple of ALIGNMENT
 static size_t align(size_t x)
@@ -84,7 +85,7 @@ typedef struct free_list {
     free_list_node_t* head;
 } free_list_t;
 
-free_list_t free_list;
+free_list_t free_list[14];
 
 /*
  * read_block: reads a word at address ptr
@@ -182,21 +183,62 @@ static uint64_t* get_block_payload(uint64_t *ptr) {
 
 }
 
+static int get_list_index(uint64_t size) {
+
+    int index = 0; 
+
+    if(size < 17){
+        index = 0;
+    } else if(size < 33) {
+        index = 1;
+    } else if(size < 65) {
+        index = 2;
+    } else if(size < 129) {
+        index = 3;
+    } else if(size < 257) {
+        index = 4;
+    } else if(size < 513) {
+        index = 5;
+    } else if(size < 1025) {
+        index = 6;
+    } else if(size < 2049) {
+        index = 7;
+    } else if(size < 4097) {
+        index = 8;
+    } else if(size < 8193) {
+        index = 9;
+    } else if(size < 16385) {
+        index = 10;
+    } else if(size < 32769) {
+        index = 11;
+    } else if(size < 65537) {
+        index = 12;
+    } else {
+        index = 13;
+    }
+
+    return index;
+
+
+}
+
 /*
  * insert_free_block: inserts a free block into the free list
  */
 
-static void __attribute__ ((noinline)) insert_free_block(free_list_node_t* free_block) {
+static void __attribute__ ((noinline)) insert_free_block(free_list_node_t* free_block, uint64_t size) {
 
-    if (free_list.head == NULL) {
-        free_list.head = free_block;
+    int index = get_list_index(size);
+
+    if (free_list[index].head == NULL) {
+        free_list[index].head = free_block;
         free_block->next = free_block;
         free_block->prev = free_block;
     } else {
-        free_block->next = free_list.head;
-        free_block->prev = free_list.head->prev;
-        free_list.head->prev->next = free_block;
-        free_list.head->prev = free_block;
+        free_block->next = free_list[index].head;
+        free_block->prev = free_list[index].head->prev;
+        free_list[index].head->prev->next = free_block;
+        free_list[index].head->prev = free_block;
     }
 
 }
@@ -205,18 +247,20 @@ static void __attribute__ ((noinline)) insert_free_block(free_list_node_t* free_
  * remove_free_block: removes a free block from the free list
  */
 
-static void __attribute__ ((noinline)) remove_free_block(free_list_node_t* free_block) {
+static void __attribute__ ((noinline)) remove_free_block(free_list_node_t* free_block, uint64_t size) {
+
+    int index = get_list_index(size);
 
     // If the free block is the head of the free list
-    if (free_block == free_list.head) {
+    if (free_block == free_list[index].head) {
         // if free block is the only block in the free list
         if (free_block->next == free_block) {
-            free_list.head->next = NULL;
-            free_list.head->prev = NULL;
-            free_list.head = NULL;
+            free_list[index].head->next = NULL;
+            free_list[index].head->prev = NULL;
+            free_list[index].head = NULL;
             return;
         } else {
-            free_list.head = free_block->next;
+            free_list[index].head = free_block->next;
         }
     }
     free_block->prev->next = free_block->next;
