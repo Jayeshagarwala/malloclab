@@ -219,7 +219,6 @@ static int get_list_index(uint64_t size) {
 
     return index;
 
-
 }
 
 /*
