@@ -1,1 +1,1 @@
-Intel(R)Core(TM)i5-6267UCPU@2.90GHz:regular:16905
+Intel(R)Core(TM)i5-6267UCPU@2.90GHz:regular:16199

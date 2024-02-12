@@ -3,10 +3,48 @@
  *
  * Name: Jayesh Agarwala
  *
- * This is a simple, segregated, implicit free list memory allocator
- * with implementation of malloc, free and realloc functions.
+ * DESIGN: 
+ * 
+ * Malloc implementation using segregated free lists and first fit allocation strategy. 
+ * 
+ * Segregated list contains explicit free list of 14 lists, 
+ * each containing free blocks of size 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536 and greater than 65536 bytes.
+ * The free list is a circular doubly linked list with a head pointer.
+ * 
+ * Each free block contains a header and a footer, each of size 8 bytes.
+ * The header contains the size of the block, the current allocated bit and the previous allocated bit.
+ * The footer contains the size of the block and the current allocated bit.
+ * 
+ * The prologue (16 bytes) and epilogue (8 bytes) blocks are used to mark the start and end of the heap.
+ * Padding (8 bytes) is used to ensure that the payload is 16-byte aligned.
+ * 
+ * The malloc function uses the best fit strategy to find a free block of sufficient size.
+ * 
+ * 
+ * GLOBAL VARIABLE SPACE (128 bytes):
+ * 
+ * Prologue pointer: 8 bytes
+ * Epilogue pointer: 8 bytes
+ * Free list: 14 * 8 bytes = 112 bytes
+ * 
+ * 
+ * HEAP CHECKER:
+ * 
+ * Useful tool for debugging and checking the correctness of the heap.
+ * 
+ * The heap checker checks the following invariants:
+ * 1. Every block is 16-byte aligned
+ * 2. Contiguous free blocks escaped coalescing
+ * 3. The header and footer of each free block match
+ * 4. No block exceeds heap size
+ * 5. No block is outside the heap
+ * 6. No allocated block is in the free list
+ * 7. The next block pointer in consistent
+ * 8. The prev block pointer in consistent
+ * 9. The free block is in correct free list
+ * 
  *
- * References:
+ * REFERENCES:
  * 1. Computer System's A Programmer's Perspective by Randal E. Bryant and David R. O'Hallaron (Chapter 9.9)
  * 2. CMPSC 473 Lecture Slides: Dynamic Memory Allocation by Timothy Zhu (Penn State University) 
  */
@@ -27,7 +65,7 @@
  * uncomment the following line. Be sure not to have debugging enabled
  * in your final submission.
  */
-#define DEBUG
+//#define DEBUG
 
 #ifdef DEBUG
 // When debugging is enabled, the underlying functions get called
@@ -71,7 +109,6 @@ static size_t align(size_t x)
 /*
  * structure of the free list which is a circular doubly linked list with head pointer
  */
-
 typedef struct free_list_node {
     struct free_list_node* prev;
     struct free_list_node* next;
@@ -80,7 +117,6 @@ typedef struct free_list_node {
 /*
  * structure of the free list head
  */
-
 typedef struct free_list {
     free_list_node_t* head;
 } free_list_t;
@@ -90,7 +126,6 @@ free_list_t free_list[14];
 /*
  * read_block: reads a word at address ptr
  */
-
 static uint64_t read_block(uint64_t *ptr) {
 
     return *((uint64_t *)ptr);
@@ -100,7 +135,6 @@ static uint64_t read_block(uint64_t *ptr) {
 /*
  * write_block: writes a word at address ptr
  */
-
 static void write_block(uint64_t *ptr, uint64_t val) {
 
     *((uint64_t *)ptr) = val;
@@ -110,7 +144,6 @@ static void write_block(uint64_t *ptr, uint64_t val) {
 /*
  * packHeader: packs a size, current allocated bit and previous allocated bit into a word
  */
-
 static uint64_t packHeader(uint64_t size, uint64_t is_allocated, uint64_t is_prev_allocated) {
 
     return  (uint64_t)(size | is_prev_allocated << 1 | is_allocated);
@@ -119,7 +152,6 @@ static uint64_t packHeader(uint64_t size, uint64_t is_allocated, uint64_t is_pre
 /*
  * packFooter: packs a size and allocated bit into a word
  */
-
 static uint64_t packFooter(uint64_t size, uint64_t is_allocated) {
 
     return  (uint64_t)(size | is_allocated);
@@ -138,7 +170,6 @@ static uint64_t get_block_size(uint64_t *ptr) {
 /*
  * get_is_allocated: reads if the block is allocated or not from header or footer
  */
-
 static uint64_t get_is_allocated(uint64_t *ptr) {
 
     return read_block(ptr) & 0x1;
@@ -148,7 +179,6 @@ static uint64_t get_is_allocated(uint64_t *ptr) {
 /*
  * get_is_prev_allocated: reads if the previous block is allocated or not from header
  */
-
 static uint64_t get_is_prev_allocated(uint64_t *ptr) {
 
     return (read_block(ptr) & 0x2) >> 1;
@@ -159,7 +189,6 @@ static uint64_t get_is_prev_allocated(uint64_t *ptr) {
 /*
  * get_header: returns the header address of a block, given block payload pointer
  */
-
 static uint64_t* get_header(uint64_t *ptr) {
 
     return (uint64_t *)((uint64_t *)ptr - (HEADER_SIZE/UINT64_T_SIZE));
@@ -169,7 +198,6 @@ static uint64_t* get_header(uint64_t *ptr) {
 /*
  * get_footer: returns the footer address of a block, given block header pointer
  */
-
 static uint64_t* get_footer(uint64_t *ptr) {
 
     return (uint64_t *)((uint64_t *)ptr + ((get_block_size(ptr) - FOOTER_SIZE)/UINT64_T_SIZE));
@@ -197,13 +225,15 @@ static uint64_t* get_prev_block(uint64_t *ptr) {
 /*
  * get_block_payload: returns the payload address, given block pointer
  */
-
 static uint64_t* get_block_payload(uint64_t *ptr) {
 
     return (uint64_t *)((uint64_t *)ptr + (HEADER_SIZE/UINT64_T_SIZE));
 
 }
 
+/*
+ * get_list_index: returns the index of the free list, given block size
+ */
 static int get_list_index(uint64_t size) {
 
     int index = 0; 
@@ -258,14 +288,16 @@ static int get_list_index(uint64_t size) {
 /*
  * insert_free_block: inserts a free block into the free list
  */
-
 static void __attribute__ ((noinline)) insert_free_block(free_list_node_t* free_block, int index) {
 
+    //if the free list is empty
     if (free_list[index].head == NULL) {
         free_list[index].head = free_block;
         free_block->next = free_block;
         free_block->prev = free_block;
-    } else {
+    } 
+    // if the free list is not empty
+    else {
         free_block->next = free_list[index].head;
         free_block->prev = free_list[index].head->prev;
         free_list[index].head->prev->next = free_block;
@@ -277,7 +309,6 @@ static void __attribute__ ((noinline)) insert_free_block(free_list_node_t* free_
 /*
  * remove_free_block: removes a free block from the free list
  */
-
 static void __attribute__ ((noinline)) remove_free_block(free_list_node_t* free_block, int index) {
 
     // If the free block is the head of the free list
@@ -292,6 +323,7 @@ static void __attribute__ ((noinline)) remove_free_block(free_list_node_t* free_
             free_list[index].head = free_block->next;
         }
     }
+    // if the free block is not the head of the free list
     free_block->prev->next = free_block->next;
     free_block->next->prev = free_block->prev;
     free_block->next = NULL;
@@ -311,9 +343,11 @@ static uint64_t* coalesce(uint64_t *ptr){
     uint64_t is_previous_allocated = get_is_prev_allocated(ptr);
     uint64_t is_next_allocated = get_is_allocated(next_block);
 
+    // if the previous and next blocks are allocated, return the current block
     if(is_previous_allocated == 1 && is_next_allocated == 1){
         return ptr;
     }
+    // if the previous block is free, remove it from the free list and coalesce
     else if(is_previous_allocated == 0 && is_next_allocated == 1){
         uint64_t* prev_block = get_prev_block(ptr);
         remove_free_block((free_list_node_t*)get_block_payload(prev_block), get_list_index(get_block_size(prev_block)));
@@ -326,6 +360,7 @@ static uint64_t* coalesce(uint64_t *ptr){
         ptr = prev_block;
 
     }
+    // if the next block is free, remove it from the free list and coalesce
     else if(is_previous_allocated == 1 && is_next_allocated == 0){
 
         remove_free_block((free_list_node_t*)get_block_payload(next_block), get_list_index(get_block_size(next_block)));
@@ -336,6 +371,7 @@ static uint64_t* coalesce(uint64_t *ptr){
         write_block(get_footer(ptr), packFooter(block_size, 0));
 
     }
+    // if both the previous and next blocks are free, remove them from the free list and coalesce
     else{
         uint64_t* prev_block = get_prev_block(ptr);
         remove_free_block((free_list_node_t*)get_block_payload(next_block), get_list_index(get_block_size(next_block)));
@@ -350,6 +386,7 @@ static uint64_t* coalesce(uint64_t *ptr){
 
     }
 
+    // insert the coalesced block into the free list
     free_list_node_t* new_free_block = (free_list_node_t*)get_block_payload(ptr);
     insert_free_block(new_free_block, get_list_index(block_size));
     write_block(get_block_payload(ptr),*((uint64_t *)new_free_block)); // set the payload to the free list node
@@ -360,7 +397,6 @@ static uint64_t* coalesce(uint64_t *ptr){
 /*
  * expand_heap: expands the heap by new_block_size bytes and returns the pointer to the new block
  */
-
 static uint64_t* expand_heap(uint64_t new_block_size)
 {
 
@@ -371,7 +407,7 @@ static uint64_t* expand_heap(uint64_t new_block_size)
     
     new_block_ptr -= (HEADER_SIZE/UINT64_T_SIZE); // New block header
     uint64_t is_prev_allocated = get_is_prev_allocated(new_block_ptr);
-
+    
     write_block(new_block_ptr, packHeader(new_block_size, 0, is_prev_allocated)); // New block header
     write_block(get_footer(new_block_ptr), packFooter(new_block_size, 0)); // New block footer
     write_block(get_next_block(new_block_ptr), packHeader(0, 1, 0)); // New epilogue header
@@ -391,13 +427,12 @@ static uint64_t* expand_heap(uint64_t new_block_size)
 /*
  * find_first_fit: finds the first fit free block of size size
  */
-
 static uint64_t* find_first_fit(uint64_t size) {
 
     free_list_node_t *current_block_ptr;
     
     int index = get_list_index(size);
-
+    
     for (int i = index; i < 14; i++) {
         if (free_list[i].head == NULL) {
             continue;
@@ -419,11 +454,60 @@ static uint64_t* find_first_fit(uint64_t size) {
 }
 
 /*
+ * find_best_fit: finds the best fit free block of size size in an index, if not found, search first fit in the next index
+ */
+static uint64_t* find_best_fit(uint64_t size){
+    free_list_node_t *current_block_ptr;
+
+    free_list_node_t *best_free_block_ptr = NULL;
+    uint64_t best_block_size = UINT64_MAX;
+    int best_index;
+    
+    int index = get_list_index(size);
+
+    for (int i = index; i < 14; i++) {
+
+        if (free_list[i].head == NULL) {
+            continue;
+        }
+
+        //search for a free block of best size
+        current_block_ptr = free_list[i].head;
+        do{
+            if(get_block_size(get_header((uint64_t *)current_block_ptr)) == size){
+                remove_free_block(current_block_ptr, i);
+                return get_header((uint64_t *)current_block_ptr);
+            }
+            else if(get_block_size(get_header((uint64_t *)current_block_ptr)) > size && get_block_size(get_header((uint64_t *)current_block_ptr)) < best_block_size){
+                best_free_block_ptr = current_block_ptr;
+                best_block_size = get_block_size(get_header((uint64_t *)current_block_ptr));
+                best_index = i;
+
+                if (i != index){
+                    remove_free_block(best_free_block_ptr, best_index);
+                    return get_header((uint64_t *)best_free_block_ptr);
+                }
+
+            }
+
+            current_block_ptr = current_block_ptr->next;
+
+        } while (current_block_ptr != free_list[i].head);
+
+        if(best_free_block_ptr != NULL && i == index){
+            remove_free_block(best_free_block_ptr, best_index);
+            return get_header((uint64_t *)best_free_block_ptr);
+        }
+        
+    }
+    
+    return NULL;
+}
+
+/*
  * allocate_block: allocates a block of size size
  */
-
 static void allocate_block(uint64_t *ptr, uint64_t size) {
-
 
     uint64_t block_size = get_block_size(ptr);
 
@@ -460,7 +544,6 @@ static void allocate_block(uint64_t *ptr, uint64_t size) {
         write_block(next_block_ptr, packHeader(next_block_size, is_next_allocated, 1)); // update header of next block with previous allocated bit
 
     }
-
 
 }
 
@@ -583,18 +666,24 @@ void* realloc(void* oldptr, size_t size)
 
     uint64_t* old_block_ptr = get_header(oldptr);
     uint64_t old_block_size = get_block_size(old_block_ptr);
+
+    //align the size
     if (size < 16){
         size = 16;
     }
+
     uint64_t new_block_size = (uint64_t)align(size + HEADER_SIZE);
 
+    //if the new size is same as the old size, return the old pointer
     if(old_block_size == new_block_size){
         return oldptr;
     }
+    //if the new size is less than the old size, allocate the block and return the old pointer
     else if(old_block_size > new_block_size){
         allocate_block(old_block_ptr, new_block_size);
         return oldptr;
     }
+    //if the new size is greater than the old size, allocate a new block and copy the old block to the new block
     else{
         uint64_t* new_block_ptr = malloc(size);
         if(new_block_ptr == NULL){
