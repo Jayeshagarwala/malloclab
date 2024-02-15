@@ -204,8 +204,12 @@ typedef struct free_list {
 
 free_list_t free_list[14];
 
-/*
- * read_block: reads a word at address ptr
+/**
+ * @brief reads a word at address ptr
+ * 
+ * @param ptr: address of the word
+ * 
+ * @return uint64_t: the word at address ptr
  */
 static uint64_t read_block(uint64_t *ptr) {
 
@@ -213,8 +217,13 @@ static uint64_t read_block(uint64_t *ptr) {
 
 }
 
-/*
- * write_block: writes a word at address ptr
+/**
+ * @brief writes a word at address ptr
+ * 
+ * @param ptr: address of the word
+ * @param val: value to be written
+ * 
+ * @return void
  */
 static void write_block(uint64_t *ptr, uint64_t val) {
 
@@ -222,25 +231,40 @@ static void write_block(uint64_t *ptr, uint64_t val) {
 
 }
 
-/*
- * packHeader: packs a size, current allocated bit and previous allocated bit into a word
+/**
+ * @brief packs a size, current allocated bit and previous allocated bit into a word
+ * 
+ * @param size: size of the block
+ * @param is_allocated: current allocated bit
+ * @param is_prev_allocated: previous allocated bit
+ * 
+ * @return uint64_t: the word containing the size, current allocated bit and previous allocated bit
  */
 static uint64_t packHeader(uint64_t size, uint64_t is_allocated, uint64_t is_prev_allocated) {
 
     return  (uint64_t)(size | is_prev_allocated << 1 | is_allocated);
 }
 
-/*
- * packFooter: packs a size and allocated bit into a word
+/**
+ * @brief: packs a size and allocated bit into a word
+ * 
+ * @param size: size of the block
+ * @param is_allocated: allocated bit
+ * 
+ * @return uint64_t: the word containing the size and allocated bit
  */
 static uint64_t packFooter(uint64_t size, uint64_t is_allocated) {
 
-    return  (uint64_t)(size | is_allocated);
+    return (uint64_t)(size | is_allocated);
 }
 
 
-/*
- * get_block_size: reads the block size from header or footer
+/**
+ * @brief reads the block size from header or footer
+ * 
+ * @param ptr: address of the block
+ * 
+ * @return uint64_t: the size of the block
  */
 static uint64_t get_block_size(uint64_t *ptr) {
 
@@ -248,8 +272,12 @@ static uint64_t get_block_size(uint64_t *ptr) {
 
 }
 
-/*
- * get_is_allocated: reads if the block is allocated or not from header or footer
+/**
+ * @brief: reads if the block is allocated or not from header or footer
+ * 
+ * @param ptr: address of the block
+ * 
+ * @return uint64_t: the allocated bit of the block
  */
 static uint64_t get_is_allocated(uint64_t *ptr) {
 
@@ -257,8 +285,12 @@ static uint64_t get_is_allocated(uint64_t *ptr) {
 
 }
 
-/*
- * get_is_prev_allocated: reads if the previous block is allocated or not from header
+/**
+ * @brief reads if the previous block is allocated or not from header
+ * 
+ * @param ptr: address of the block
+ * 
+ * @return uint64_t: the previous allocated bit of the block
  */
 static uint64_t get_is_prev_allocated(uint64_t *ptr) {
 
@@ -267,8 +299,12 @@ static uint64_t get_is_prev_allocated(uint64_t *ptr) {
 }
 
 
-/*
- * get_header: returns the header address of a block, given block payload pointer
+/**
+ * @brief returns the header address of a block, given block payload pointer
+ * 
+ * @param ptr: address of the block payload
+ * 
+ * @return uint64_t*: the header address of the block
  */
 static uint64_t* get_header(uint64_t *ptr) {
 
@@ -276,8 +312,12 @@ static uint64_t* get_header(uint64_t *ptr) {
 
 }
 
-/*
- * get_footer: returns the footer address of a block, given block header pointer
+/**
+ * @brief returns the footer address of a block, given block header pointer
+ * 
+ * @param ptr: address of the block header
+ * 
+ * @return uint64_t*: the footer address of the block
  */
 static uint64_t* get_footer(uint64_t *ptr) {
 
@@ -285,8 +325,12 @@ static uint64_t* get_footer(uint64_t *ptr) {
 
 }
 
-/*
- * get_next_block: returns the next block address, given block pointer
+/**
+ * @brief returns the next block address, given block pointer
+ * 
+ * @param ptr: address of the block
+ * 
+ * @return uint64_t*: the next block address
  */
 static uint64_t* get_next_block(uint64_t *ptr) {
 
@@ -294,8 +338,12 @@ static uint64_t* get_next_block(uint64_t *ptr) {
 
 }
 
-/*
- * get_prev_block: returns the previous block address, given block pointer
+/**
+ * @brief returns the previous block address, given block pointer
+ * 
+ * @param ptr: address of the block
+ * 
+ * @return uint64_t*: the previous block address
  */
 static uint64_t* get_prev_block(uint64_t *ptr) {
 
@@ -303,8 +351,12 @@ static uint64_t* get_prev_block(uint64_t *ptr) {
 
 }
 
-/*
- * get_block_payload: returns the payload address, given block pointer
+/**
+ * @brief returns the payload address, given block pointer
+ * 
+ * @param ptr: address of the block
+ * 
+ * @return uint64_t*: the payload address
  */
 static uint64_t* get_block_payload(uint64_t *ptr) {
 
@@ -312,8 +364,12 @@ static uint64_t* get_block_payload(uint64_t *ptr) {
 
 }
 
-/*
- * get_list_index: returns the index of the free list, given block size
+/**
+ * @brief: returns the index of the free list, given block size
+ * 
+ * @param size: size of the block
+ * 
+ * @return int: the index of the free list
  */
 static int get_list_index(uint64_t size) {
 
@@ -366,8 +422,13 @@ static int get_list_index(uint64_t size) {
 
 }
 
-/*
- * insert_free_block: inserts a free block into the free list
+/**
+ * @brief inserts a free block into the free list
+ * 
+ * @param free_block: free block to be inserted
+ * @param index: index of the free list
+ * 
+ * @return void
  */
 static void __attribute__ ((noinline)) insert_free_block(free_list_node_t* free_block, int index) {
 
@@ -387,8 +448,13 @@ static void __attribute__ ((noinline)) insert_free_block(free_list_node_t* free_
 
 }
 
-/*
- * remove_free_block: removes a free block from the free list
+/**
+ * @brief: removes a free block from the free list
+ * 
+ * @param free_block: free block to be removed
+ * @param index: index of the free list
+ * 
+ * @return void
  */
 static void __attribute__ ((noinline)) remove_free_block(free_list_node_t* free_block, int index) {
 
@@ -414,8 +480,12 @@ static void __attribute__ ((noinline)) remove_free_block(free_list_node_t* free_
 
 }
 
-/*
- * coalesce: coalesces the current free block with the adjacent free block and returns the new block head pointer
+/**
+ * @brief coalesces the current free block with the adjacent free block and returns the new block head pointer
+ * 
+ * @param ptr: address of the block
+ * 
+ * @return uint64_t*: the new block head pointer
  */
 static uint64_t* coalesce(uint64_t *ptr){
 
@@ -475,8 +545,12 @@ static uint64_t* coalesce(uint64_t *ptr){
     return ptr; 
 }
 
-/*
- * expand_heap: expands the heap by new_block_size bytes and returns the pointer to the new block
+/**
+ * @brief expands the heap by new_block_size bytes and returns the pointer to the new block
+ * 
+ * @param new_block_size: size of the new block
+ * 
+ * @return uint64_t*: the pointer to the new block
  */
 static uint64_t* expand_heap(uint64_t new_block_size)
 {
@@ -505,8 +579,12 @@ static uint64_t* expand_heap(uint64_t new_block_size)
 }
 
 
-/*
- * find_first_fit: finds the first fit free block of size size
+/**
+ * @brief finds the first fit free block of size size
+ * 
+ * @param size: size of the block
+ * 
+ * @return uint64_t*: the pointer to the first fit free block
  */
 static uint64_t* find_first_fit(uint64_t size) {
 
@@ -534,8 +612,12 @@ static uint64_t* find_first_fit(uint64_t size) {
 
 }
 
-/*
- * find_best_fit: finds the best fit free block of size size in an index, if not found, search first fit in the next index
+/**
+ * @brief finds the best fit free block of size size in an index, if not found, search first fit in the next index
+ * 
+ * @param size: size of the block
+ * 
+ * @return uint64_t*: the pointer to the best fit free block
  */
 static uint64_t* find_best_fit(uint64_t size){
     free_list_node_t *current_block_ptr;
@@ -585,8 +667,13 @@ static uint64_t* find_best_fit(uint64_t size){
     return NULL;
 }
 
-/*
- * allocate_block: allocates a block of size size
+/**
+ * @brief allocates a block of size size
+ * 
+ * @param ptr: address of the block
+ * @param size: size of the block
+ * 
+ * @return void
  */
 static void allocate_block(uint64_t *ptr, uint64_t size) {
 
@@ -628,8 +715,10 @@ static void allocate_block(uint64_t *ptr, uint64_t size) {
 
 }
 
-/*
- * mm_init: returns false on error, true on success.
+/**
+ * @brief initialises the heap
+ * 
+ * @return bool: true on success, false on error
  */
 bool mm_init(void)
 {
@@ -657,8 +746,12 @@ bool mm_init(void)
     return true;
 }
 
-/*
- * malloc
+/**
+ * @brief malloc
+ * 
+ * @param size: size of the block
+ * 
+ * @return void*: pointer to the allocated block
  */
 void* malloc(size_t size)
 {
@@ -692,8 +785,12 @@ void* malloc(size_t size)
 
 }
 
-/*
- * free
+/**
+ * @brief free
+ * 
+ * @param ptr: pointer to the block to be freed
+ * 
+ * @return void
  */
 void free(void* ptr)
 {
@@ -729,8 +826,13 @@ void free(void* ptr)
 
 }
 
-/*
- * realloc
+/**
+ * @brief realloc
+ * 
+ * @param oldptr: pointer to the old block
+ * @param size: size of the new block
+ * 
+ * @return void*: pointer to the new block
  */
 void* realloc(void* oldptr, size_t size)
 {
@@ -778,9 +880,14 @@ void* realloc(void* oldptr, size_t size)
     return NULL;
 }
 
-/*
- * calloc
+/**
+ * @brief calloc
  * This function is not tested by mdriver, and has been implemented for you.
+ * 
+ * @param nmemb: number of elements
+ * @param size: size of each element
+ * 
+ * @return void*: pointer to the allocated block
  */
 void* calloc(size_t nmemb, size_t size)
 {
