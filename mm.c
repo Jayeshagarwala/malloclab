@@ -2,6 +2,8 @@
  * mm.c
  *
  * Name: Jayesh Agarwala
+ * 
+ * -----------------------------------------------------------------------------------------------------------------------------------------------
  *
  * DESIGN: 
  * 
@@ -20,6 +22,81 @@
  * 
  * The malloc function uses the best fit strategy to find a free block of sufficient size.
  * 
+ * The free function coalesces the current free block with the adjacent free block if possible.
+ * 
+ * The realloc function allocates a new block of size size and copies the old block to the new block if the new size is greater than the old size.
+ * 
+ * The calloc function allocates a block of nmemb * size bytes and sets the block to zero.
+ * 
+ * -----------------------------------------------------------------------------------------------------------------------------------------------
+ * 
+ * ASCII DIAGRAM:
+ * 
+ * a: bit signifying if the block is allocated
+ * 
+ * p: bit signifying if the previous block is allocated
+ * 
+ * The following is an ASCII diagram of the heap:
+ * 
+ *                        p   a
+    +--------------------+-+-+-+
+    |    padding:        |0|0|0| Padding
+    +--------------------+-+-+-+
+    |    size:           |0|x|1| Prologue Header
+    +--------------------+-+-+-+
+    |    size:                 | Prologue Footer
+    +--------------------+-+-+-+
+    |                          |
+    |      :                   |
+    |      :                   |
+    |    Allocated or          |
+    |    Free Block            |
+    |      :                   |
+    |      :                   |
+    |                          |
+    +--------------------------+
+    |    size:           |0|x|1| Epilogue
+    +--------------------+-+-+-+
+ * 
+ *
+ * The following is an ASCII diagram of the free block: 
+ * 
+ *                        p   a
+    +--------------------+-+-+-+
+    |    size:           |0|x|0| Header
+    +--------------------+-+-+-+
+    |    free_list_node_t:     | pointer for linking free list
+    |      prev, next          |
+    +--------------------------+
+    |                          |
+    |      :                   |
+    |      :                   |
+    |    payload               |
+    |      :                   |
+    |      :                   |
+    |                          |
+    +--------------------------+
+    |    size:                 | Footer
+    +--------------------------+
+ * 
+ * 
+ * The following is an ASCII diagram of the allocated block:
+ * 
+ *                        p   a
+    +--------------------+-+-+-+
+    |    size:           |0|x|0| Header
+    +--------------------+-+-+-+
+    |                          |
+    |                          |
+    |      :                   |
+    |      :                   |
+    |    payload               |
+    |      :                   |
+    |      :                   |
+    |                          |
+    +--------------------------+
+ * 
+ * -----------------------------------------------------------------------------------------------------------------------------------------------
  * 
  * GLOBAL VARIABLE SPACE (128 bytes):
  * 
@@ -27,6 +104,7 @@
  * Epilogue pointer: 8 bytes
  * Free list: 14 * 8 bytes = 112 bytes
  * 
+ * -----------------------------------------------------------------------------------------------------------------------------------------------
  * 
  * HEAP CHECKER:
  * 
@@ -43,10 +121,13 @@
  * 8. The prev block pointer in consistent
  * 9. The free block is in correct free list
  * 
+ * -----------------------------------------------------------------------------------------------------------------------------------------------
  *
  * REFERENCES:
  * 1. Computer System's A Programmer's Perspective by Randal E. Bryant and David R. O'Hallaron (Chapter 9.9)
  * 2. CMPSC 473 Lecture Slides: Dynamic Memory Allocation by Timothy Zhu (Penn State University) 
+ * 
+ * -----------------------------------------------------------------------------------------------------------------------------------------------
  */
 
 #include <assert.h>
@@ -241,7 +322,7 @@ static int get_list_index(uint64_t size) {
     if(size < 17){
         index = 0;
     } 
-    else if(size < 33) {
+    if(size < 33) {
         index = 1;
     } 
     else if(size < 65) {
